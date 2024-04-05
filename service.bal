@@ -4,8 +4,7 @@ import ballerinax/mongodb;
 
 configurable string host = ?;
 configurable string database = ?;
-const string creditCollection = "credits";
-const string slotMachineRecordsCollection = "slot_machine_records";
+const string loteryCollection = "lottery";
 
 final mongodb:Client mongoDb = check new ({
     connection: host
@@ -16,30 +15,61 @@ final mongodb:Client mongoDb = check new ({
 service / on new http:Listener(9090) {
 
     private final mongodb:Database Db;
-    # A resource for generating greetings
-    # + name - the input string name
-    # + return - string name with hello message or error
-    resource function get greeting(string name) returns string|error {
-        // Send a response back to the caller.
-        if name is "" {
-            return error("name should not be empty!");
+
+    function init() returns error? {
+        self.Db = check mongoDb->getDatabase(database);
+    }
+
+    resource function post bet(LotteryUpdate bet) returns string|error {
+        mongodb:Collection lotteryCol = check self.Db->getCollection(loteryCollection);
+
+        boolean currentLottery = check getBet(self.Db, bet.email);
+        if currentLottery {
+            mongodb:UpdateResult updateResult = check lotteryCol->updateOne({email: bet.email}, {set: {
+                value: bet.value
+            }});
+            if updateResult.modifiedCount != 1 {
+            return error(string `Failed to update the bet with email ${bet.email}`);
         }
-        return "Hello, " + name;
+        } else {
+            string id = uuid:createType1AsString();
+            Lottery cr = {
+                id: id, value: bet.value, 
+                email: bet.email, 
+                last_draw_value: "", 
+                last_draw_bet_value: "",
+                enabled: false, 
+                winner: false
+            };
+            check lotteryCol->insertOne(cr);
+        }
+        return "bet done";
     }
 }
 
+isolated function getBet(mongodb:Database Db, string email) returns boolean|error {
+    mongodb:Collection creditCol = check Db->getCollection(loteryCollection);
+    stream<Lottery, error?> findResult = check creditCol->find({email});
+    Lottery[] result = check from Lottery m in findResult
+        select m;
+    if result.length() == 0 {
+        return false;
+    }
+    return true;
+}
 
 public type LoteryInput record {|
     string value;
-    string last_draw_value;
     string email;
-    boolean enabled;
-    boolean winner;
+    string last_draw_bet_value?;
+    string last_draw_value?;
+    boolean enabled?;
+    boolean winner?;
 |};
 
-public type CreditUpdate record {|
-    int deduction;
-    string date;
+public type LotteryUpdate record {|
+    string value;
+    string email;
 |};
 
 public type Lottery record {|
