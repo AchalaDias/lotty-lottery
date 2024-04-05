@@ -12,7 +12,7 @@ final mongodb:Client mongoDb = check new ({
 
 # A service representing a network-accessible API
 # bound to port `9090`.
-service / on new http:Listener(9090) {
+service / on new http:Listener(9091) {
 
     private final mongodb:Database Db;
 
@@ -20,25 +20,39 @@ service / on new http:Listener(9090) {
         self.Db = check mongoDb->getDatabase(database);
     }
 
+    resource function get results/[string email]() returns Lottery|error {
+        mongodb:Collection creditCol = check self.Db->getCollection(loteryCollection);
+        stream<Lottery, error?> findResult = check creditCol->find({email});
+        Lottery[] result = check from Lottery m in findResult
+            select m;
+        if result.length() == 0 {
+            return error(string `Failed to get the bet with email ${email}`);
+        }
+        return result[0];
+    }
+
     resource function post bet(LotteryUpdate bet) returns string|error {
         mongodb:Collection lotteryCol = check self.Db->getCollection(loteryCollection);
 
         boolean currentLottery = check getBet(self.Db, bet.email);
         if currentLottery {
-            mongodb:UpdateResult updateResult = check lotteryCol->updateOne({email: bet.email}, {set: {
-                value: bet.value
-            }});
+            mongodb:UpdateResult updateResult = check lotteryCol->updateOne({email: bet.email}, {
+                set: {
+                    value: bet.value
+                }
+            });
             if updateResult.modifiedCount != 1 {
-            return error(string `Failed to update the bet with email ${bet.email}`);
-        }
+                return error(string `Failed to update the bet with email ${bet.email}`);
+            }
         } else {
             string id = uuid:createType1AsString();
             Lottery cr = {
-                id: id, value: bet.value, 
-                email: bet.email, 
-                last_draw_value: "", 
+                id: id,
+                value: bet.value,
+                email: bet.email,
+                last_draw_value: "",
                 last_draw_bet_value: "",
-                enabled: false, 
+                enabled: false,
                 winner: false
             };
             check lotteryCol->insertOne(cr);
