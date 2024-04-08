@@ -1,0 +1,14 @@
+apiVersion: core.choreo.dev/v1beta1
+kind: ComponentConfig
+spec:
+  inbound:
+    - name: lotty-lottery-api
+      port: 9091
+      type: REST
+      networkVisibility: Public
+      schemaFilePath: service_openapi.yaml
+  # outbound:
+  #   serviceReferences:
+  #   - name: choreo:///achalatd/lottyfrontline/zgclcv/9f757/v1.0/ORGANIZATION
+  #     connectionConfig: 01eef5b9-930e-1326-896d-6421568b0e09
+
